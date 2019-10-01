@@ -10,20 +10,26 @@
  * governing permissions and limitations under the License.
  */
 
-/* eslint-env mocha */
+const mammoth = require('mammoth');
 
-'use strict';
-
-const fse = require('fs-extra');
-const path = require('path');
-const assert = require('assert');
-const docs2md = require('../src/docs2md');
-
-describe('Docs to markdown converter', () => {
-  it('converts a google docs json correctly', async () => {
-    const doc = await fse.readJson(path.resolve(__dirname, 'fixtures', 'doc.json'));
-    const expected = await fse.readFile(path.resolve(__dirname, 'fixtures', 'doc.md'), 'utf-8');
-    const actual = docs2md(doc);
-    assert.equal(actual, expected);
+/**
+ * Converts a docx to markdown.
+ *
+ * @param {Buffer} doc - the word document
+ * @returns the markdown representation.
+ */
+async function docx2markdown(doc) {
+  const res = await mammoth.convertToMarkdown(doc, {
+    styleMap: [
+      "p[style-name='Code Block'] => code",
+      "p[style-name='Inline Code'] => code",
+    ],
   });
-});
+  if (res.messages.length > 0) {
+    // eslint-disable-next-line no-console
+    console.log(res.messages);
+  }
+  return res.value;
+}
+
+module.exports = docx2markdown;

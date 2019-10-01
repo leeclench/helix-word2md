@@ -15,27 +15,25 @@
 'use strict';
 
 const path = require('path');
-const { Logger } = require('@adobe/helix-shared');
 const fse = require('fs-extra');
 const assert = require('assert');
 const nock = require('nock');
-const { main, setLogger } = require('../src/index.js');
+const { main } = require('../src/index.js');
 
 const DUMMY_PARAMS = {
-  GOOGLE_DOCS2MD_CLIENT_ID: 'dummy',
-  GOOGLE_DOCS2MD_CLIENT_SECRET: 'dummy',
-  GOOGLE_DOCS2MD_REFRESH_TOKEN: 'dummy',
-  rootId: 'abcd',
+  AZURE_WORD2MD_CLIENT_ID: 'dummy',
+  AZURE_WORD2MD_CLIENT_SECRET: 'dummy',
+  AZURE_WORD2MD_REFRESH_TOKEN: 'dummy',
+  shareLink: 'abcd',
   path: '/foo',
 };
 
 describe('Action Tests', () => {
   afterEach(() => {
-    setLogger(null);
     nock.cleanAll();
   });
 
-  ['GOOGLE_DOCS2MD_CLIENT_ID', 'GOOGLE_DOCS2MD_CLIENT_SECRET', 'GOOGLE_DOCS2MD_REFRESH_TOKEN', 'rootId', 'path'].forEach((name, idx, names) => {
+  ['AZURE_WORD2MD_CLIENT_ID', 'AZURE_WORD2MD_CLIENT_SECRET', 'AZURE_WORD2MD_REFRESH_TOKEN', 'shareLink', 'path'].forEach((name, idx, names) => {
     it(`action fails if ${name} parameter is missing`, async () => {
       const params = {};
       for (let i = 0; i < idx; i += 1) {
@@ -53,29 +51,27 @@ describe('Action Tests', () => {
   });
 
   it('action returns content from google docs', async () => {
-    const docsJson = await fse.readFile(path.resolve(__dirname, 'fixtures', 'doc.json'));
+    const docx = await fse.readFile(path.resolve(__dirname, 'fixtures', 'document.docx'));
     const docsMd = await fse.readFile(path.resolve(__dirname, 'fixtures', 'doc.md'), 'utf-8');
-    nock('https://oauth2.googleapis.com')
-      .post('/token')
+    nock('https://login.windows.net')
+      .post('/common/oauth2/token?api-version=1.0')
       .reply(200, {
+        token_type: 'Bearer',
         refresh_token: 'dummy',
-      })
-      .post('/token')
-      .reply(200, {
-        refresh_token: 'dummy',
+        access_token: 'dummy',
+        expires_in: 81000,
       });
-    nock('https://www.googleapis.com')
-      .get('/drive/v3/files?q=%27abcd%27%20in%20parents%20and%20name%20%3D%20%22foo%22%20and%20trashed%3Dfalse%20and%20mimeType%20%21%3D%20%27application%2Fvnd.google-apps.folder%27&fields=files%28id%2C%20name%29&includeItemsFromAllDrives=true&supportsAllDrives=true')
+    nock('https://graph.microsoft.com/v1.0')
+      .get('/shares/u!YWJjZA=/driveItem')
       .reply(200, {
-        files: [
-          {
-            id: 1234,
-          },
-        ],
+        id: 'docid',
+        parentReference: {
+          driveId: 'driveid',
+        },
       });
-    nock('https://docs.googleapis.com')
-      .get('/v1/documents/1234')
-      .reply(200, docsJson);
+    nock('https://graph.microsoft.com/v1.0')
+      .get('/drives/driveid/items/docid:/foo:/content')
+      .reply(200, docx);
 
     const result = await main(DUMMY_PARAMS);
     assert.deepEqual(result, {
@@ -90,42 +86,28 @@ describe('Action Tests', () => {
   });
 
   it('action returns content from google docs with folder', async () => {
-    const docsJson = await fse.readFile(path.resolve(__dirname, 'fixtures', 'doc.json'));
+    const docx = await fse.readFile(path.resolve(__dirname, 'fixtures', 'document.docx'));
     const docsMd = await fse.readFile(path.resolve(__dirname, 'fixtures', 'doc.md'), 'utf-8');
-    nock('https://oauth2.googleapis.com')
-      .post('/token')
+    nock('https://login.windows.net')
+      .post('/common/oauth2/token?api-version=1.0')
       .reply(200, {
+        token_type: 'Bearer',
         refresh_token: 'dummy',
-      })
-      .post('/token')
-      .reply(200, {
-        refresh_token: 'dummy',
-      })
-      .post('/token')
-      .reply(200, {
-        refresh_token: 'dummy',
+        access_token: 'dummy',
+        expires_in: 81000,
       });
-    nock('https://www.googleapis.com')
-      .get('/drive/v3/files?q=%27abcd%27%20in%20parents%20and%20name%20%3D%20%22foo%22%20and%20trashed%3Dfalse%20and%20mimeType%20%3D%20%27application%2Fvnd.google-apps.folder%27&fields=files%28id%2C%20name%29&includeItemsFromAllDrives=true&supportsAllDrives=true')
+    nock('https://graph.microsoft.com/v1.0')
+      .get('/shares/u!YWJjZA=/driveItem')
       .reply(200, {
-        files: [
-          {
-            id: 6644,
-          },
-        ],
+        id: 'docid',
+        parentReference: {
+          driveId: 'driveid',
+        },
       });
-    nock('https://www.googleapis.com')
-      .get('/drive/v3/files?q=%276644%27%20in%20parents%20and%20name%20%3D%20%22bar%22%20and%20trashed%3Dfalse%20and%20mimeType%20%21%3D%20%27application%2Fvnd.google-apps.folder%27&fields=files%28id%2C%20name%29&includeItemsFromAllDrives=true&supportsAllDrives=true')
-      .reply(200, {
-        files: [
-          {
-            id: 1234,
-          },
-        ],
-      });
-    nock('https://docs.googleapis.com')
-      .get('/v1/documents/1234')
-      .reply(200, docsJson);
+    nock('https://graph.microsoft.com/v1.0')
+      .get('/drives/driveid/items/docid:/foo/bar:/content')
+      .reply(200, docx);
+
 
     const result = await main({
       ...DUMMY_PARAMS,
@@ -143,20 +125,26 @@ describe('Action Tests', () => {
   });
 
   it('action handles 404 if file not found', async () => {
-    nock('https://oauth2.googleapis.com')
-      .post('/token')
+    nock('https://login.windows.net')
+      .post('/common/oauth2/token?api-version=1.0')
       .reply(200, {
+        token_type: 'Bearer',
         refresh_token: 'dummy',
-      })
-      .post('/token')
-      .reply(200, {
-        refresh_token: 'dummy',
+        access_token: 'dummy',
+        expires_in: 81000,
       });
-    nock('https://www.googleapis.com')
-      .get('/drive/v3/files?q=%27abcd%27%20in%20parents%20and%20name%20%3D%20%22not_exists%22%20and%20trashed%3Dfalse%20and%20mimeType%20%21%3D%20%27application%2Fvnd.google-apps.folder%27&fields=files%28id%2C%20name%29&includeItemsFromAllDrives=true&supportsAllDrives=true')
+    nock('https://graph.microsoft.com/v1.0')
+      .get('/shares/u!YWJjZA=/driveItem')
       .reply(200, {
-        files: [],
+        id: 'docid',
+        parentReference: {
+          driveId: 'driveid',
+        },
       });
+    nock('https://graph.microsoft.com/v1.0')
+      .get('/drives/driveid/items/docid:/not_exists:/content')
+      .reply(404);
+
     const result = await main({
       ...DUMMY_PARAMS,
       path: '/not_exists',
@@ -167,28 +155,6 @@ describe('Action Tests', () => {
         'Cache-Control': 'no-store, private, must-revalidate',
       },
       statusCode: 404,
-    });
-  });
-
-  it('error in main function is caught', async () => {
-    const logger = Logger.getTestLogger({
-      // tune this for debugging
-      level: 'info',
-    });
-    logger.trace = logger.debug;
-    logger.fields = {}; // avoid errors during setup. test logger is winston, but we need bunyan.
-    logger.flush = () => {
-      throw new Error('error during flush.');
-    };
-    setLogger(logger);
-
-    const result = await main({
-      rootId: 'abcd',
-      path: '/foo',
-    }, logger);
-
-    assert.deepEqual(result, {
-      statusCode: 500,
     });
   });
 });

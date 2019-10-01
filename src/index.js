@@ -10,12 +10,10 @@
  * governing permissions and limitations under the License.
  */
 /* eslint-disable no-console,no-param-reassign */
-const { logger: setupLogger } = require('@adobe/openwhisk-action-utils');
+const { logger } = require('@adobe/openwhisk-action-utils');
 const statusWrap = require('@adobe/helix-status').wrap;
-const GoogleDocs = require('./GoogleDocs.js');
-const docs2md = require('./docs2md.js');
-
-let log;
+const OneDrive = require('./OneDrive.js');
+const docx2md = require('./docx2md.js');
 
 /**
  * Generates an error response
@@ -39,42 +37,41 @@ function error(message, statusCode = 500) {
  * @returns {Promise<response>}
  */
 async function fetchViaAPI(params) {
+  const { __ow_logger: log } = params;
   const {
-    GOOGLE_DOCS2MD_CLIENT_ID: clientId,
-    GOOGLE_DOCS2MD_CLIENT_SECRET: clientSecret,
-    GOOGLE_DOCS2MD_REFRESH_TOKEN: refreshToken,
-    rootId, path,
+    AZURE_WORD2MD_CLIENT_ID: clientId,
+    AZURE_WORD2MD_CLIENT_SECRET: clientSecret,
+    AZURE_WORD2MD_REFRESH_TOKEN: refreshToken,
+    shareLink, path,
   } = params;
   if (!clientId) {
-    return error('GOOGLE_DOCS2MD_CLIENT_ID parameter missing.');
+    return error('AZURE_WORD2MD_CLIENT_ID parameter missing.');
   }
   if (!clientSecret) {
-    return error('GOOGLE_DOCS2MD_CLIENT_SECRET parameter missing.');
+    return error('AZURE_WORD2MD_CLIENT_SECRET parameter missing.');
   }
   if (!refreshToken) {
-    return error('GOOGLE_DOCS2MD_REFRESH_TOKEN parameter missing.');
+    return error('AZURE_WORD2MD_REFRESH_TOKEN parameter missing.');
   }
-  if (!rootId) {
-    return error('rootId parameter missing.');
+  if (!shareLink) {
+    return error('shareLink parameter missing.');
   }
   if (!path) {
     return error('path parameter missing.');
   }
 
-  const auth = GoogleDocs.createOAuth({
+  const drive = new OneDrive({
     clientId,
     clientSecret,
-  }, {
-    refresh_token: refreshToken,
+    refreshToken,
   });
 
-  const docs = new GoogleDocs(auth).withLogger(log);
   const t0 = Date.now();
-  const docId = await docs.getDocId(rootId, path);
+  const rootItem = await drive.getDriveItemFromShareLink(shareLink);
   const t1 = Date.now();
-  const doc = await docs.fetchDocument(docId);
+  const doc = await drive.getDriveItem(rootItem, path, true);
   const t2 = Date.now();
-  const md = await docs2md(doc);
+  const md = await docx2md(doc);
   const t3 = Date.now();
   log.info('resolve=%d, fetch=%d, convert=%d', t1 - t0, t2 - t1, t3 - t2);
   return {
@@ -94,14 +91,7 @@ async function fetchViaAPI(params) {
  * @returns {Promise<*>} The response
  */
 async function run(params) {
-  const disclosed = { ...params };
-  Object.keys(disclosed).forEach((key) => {
-    if (key.match(/^[A-Z0-9_]+$/)) {
-      delete disclosed[key];
-    }
-  });
-  log.trace('%s', JSON.stringify(disclosed));
-
+  const { __ow_logger: log } = params;
   try {
     return await fetchViaAPI(params);
   } catch (e) {
@@ -116,24 +106,7 @@ async function run(params) {
  * @returns {Promise<*>} The response
  */
 async function main(params) {
-  try {
-    log = setupLogger(params, log);
-    const result = await run(params);
-    if (log.flush) {
-      log.flush(); // don't wait
-    }
-    return result;
-  } catch (e) {
-    console.error(e);
-    return {
-      statusCode: e.statusCode || 500,
-    };
-  }
+  return logger.wrap(run, params);
 }
 
 module.exports.main = statusWrap(main, {});
-
-// helper method for testing
-module.exports.setLogger = (logger) => {
-  log = logger;
-};

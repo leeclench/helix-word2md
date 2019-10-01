@@ -14,7 +14,7 @@
 
 const fs = require('fs');
 const OneDrive = require('./../src/OneDrive.js');
-const docs2md = require('./../src/docs2md.js');
+const docx2md = require('./../src/docx2md.js');
 
 require('dotenv').config();
 
@@ -32,37 +32,31 @@ async function main() {
   });
 
   console.time('total');
-  console.log(await drive.me());
-  // let doc = '';
-  // try {
-  //   doc = JSON.parse(fs.readFileSync('doc.json', 'utf-8'));
-  //   process.stderr.write('doc.json loaded.\n');
-  // } catch (e) {
-  //   process.stderr.write('doc.json not found. fetching from google.\n');
-  //   // ignore
-  // }
-  //
-  // if (!doc) {
-  //   console.time('lookup');
-  //   const docId = await docs.getDocId('1I_FwT5qXkZTevAeZ9EqUqLaS0RbLFkI2', 'styling-test-document');
-  //   console.timeEnd('lookup');
-  //   console.time('fetch');
-  //   doc = await docs.fetchDocument(docId);
-  //   console.timeEnd('fetch');
-  //   fs.writeFileSync('doc.json', JSON.stringify(doc, null, 2), 'utf-8');
-  // }
-  //
-  // console.time('convert');
-  // const md = await docs2md(doc);
-  // console.timeEnd('convert');
+  let doc = '';
+  try {
+    doc = fs.readFileSync('document.docx');
+    process.stderr.write('document.docx loaded.\n');
+  } catch (e) {
+    process.stderr.write('document.docx not found. fetching from onedrive.\n');
+    // ignore
+  }
+
+  if (!doc) {
+    console.time('lookup');
+    const rootItem = await drive.getDriveItemFromShareLink('https://adobe-my.sharepoint.com/personal/tripod_adobe_com/Documents/helix-content?csf=1&e=Fz6r5Z');
+    console.timeEnd('lookup');
+    console.time('fetch');
+    doc = await drive.getDriveItem(rootItem, 'styling-test.docx', true);
+    console.timeEnd('fetch');
+    fs.writeFileSync('document.docx', doc);
+  }
+
+  console.time('convert');
+  const md = await docx2md(doc);
+  console.timeEnd('convert');
 
   console.timeEnd('total');
-  // console.log(md);
-
-  console.time('total');
-  console.log(await drive.me());
-  console.timeEnd('total');
-
+  console.log(md);
 }
 
 main().catch(console.error);

@@ -20,31 +20,34 @@ require('dotenv').config();
 
 const redirectUri = 'http://localhost:3000/token';
 
-const {
-  AZURE_WORD2MD_CLIENT_ID: clientId,
-  AZURE_WORD2MD_CLIENT_SECRET: clientSecret,
-  AZURE_WORD2MD_REFRESH_TOKEN: refreshToken,
-} = process.env;
+function createOneDriveClient() {
+  const {
+    AZURE_WORD2MD_CLIENT_ID: clientId,
+    AZURE_WORD2MD_CLIENT_SECRET: clientSecret,
+    AZURE_WORD2MD_REFRESH_TOKEN: refreshToken,
+  } = process.env;
 
-let tokens = {};
-try {
-  tokens = JSON.parse(fs.readFileSync('tokens.json', 'utf-8'));
-} catch (e) {
-  // ignore
+  let tokens = {};
+  try {
+    tokens = JSON.parse(fs.readFileSync('tokens.json', 'utf-8'));
+  } catch (e) {
+    // ignore
+  }
+
+  const {
+    accessToken,
+    expiresOn,
+  } = tokens;
+
+  return new OneDrive({
+    clientId,
+    clientSecret,
+    refreshToken,
+    accessToken,
+    expiresOn,
+  });
 }
-
-const {
-  accessToken,
-  expiresOn,
-} = tokens;
-
-const drive = new OneDrive({
-  clientId,
-  clientSecret,
-  refreshToken,
-  accessToken,
-  expiresOn,
-});
+const drive = createOneDriveClient();
 
 // register event handle to write back tokens.
 drive.on('tokens', (tokens) => {
@@ -84,18 +87,6 @@ async function root(req, res) {
   }
   try {
     const result = await drive.me();
-    // .api('/me')
-    // .api('/me/drive/sharedWithMe')
-    // .api('/me/drive/root')
-    // .api('/me/drive/root/children')
-    // .api('/me/drive/root:/helix-content:/children')
-    //   .api('/users/d761979c-6e22-4799-96bb-260741d23577/drive/items/01DZG6HAJTES6UCJDZP5D36MKGBX76IBXP/children')
-    //   .api('https://graph.microsoft.com/v1.0/shares/u!aHR0cHM6Ly9hZG9iZS1teS5zaGFyZXBvaW50LmNvbS9wZXJzb25hbC90cmlwb2RfYWRvYmVfY29tL0RvY3VtZW50cy9oZWxpeC1jb250ZW50P2NzZj0xJmU9Rno2cjVa/driveItem')
-    //   .api('/drives/b!O3W0KoHNgkGJDqK0Mx3HRg0KyUx90AtIiO0o6b7VpaHBBzev_e85S41-2BAnw1ma/items/01DZG6HAJTES6UCJDZP5D36MKGBX76IBXP:/sub/welcome.docx')
-    //   .get();
-
-    // res.setHeader('content-type', 'application/json');
-    // res.end(JSON.stringify(result, null, 2));
     res.setHeader('content-type', 'text/html; charset=utf-8');
     const html = [
       `welcome <b>${result.displayName}</b><br>`,
@@ -157,44 +148,6 @@ async function md(req, res) {
       .send('Something broke!');
   }
 }
-
-
-  // res.end(req.path);
-  // try {
-  //   // const { id } = req.path;
-  //   console.log(req.path);
-  //   const stream = await client
-  //     .api(`/users/d761979c-6e22-4799-96bb-260741d23577/drive/items/${id}/content`)
-  //     .getStream();
-  //   const writeStream = fs.createWriteStream(`${id}.docx`);
-  //   stream.pipe(writeStream)
-  //     .on('error', (err) => {
-  //       console.log(err);
-  //     });
-  //   writeStream.on('finish', () => {
-  //     console.log('finish');
-  //     res.end('downloaded');
-  //   });
-  //   writeStream.on('error', (err) => {
-  //     console.log(err);
-  //   });
-  // } catch (e) {
-  //   console.error(e);
-  //   res.status(500).send('Something broke!');
-  // }
-// }
-
-/*
-
-const sharingUrl='https://adobe-my.sharepoint.com/personal/tripod_adobe_com/Documents/helix-content?csf=1&e=Fz6r5Z';
-const base64 = Buffer.from(sharingUrl, 'utf-8').toString('base64');
-const encodedUrl = "u!" + base64.trimEnd('=').replace('/','_').replace('+','-');
-
-
-console.log(base64);
-console.log(encodedUrl);
-
- */
 
 function asyncHandler(fn) {
   return (req, res, next) => (Promise.resolve(fn(req, res, next)).catch(next));
