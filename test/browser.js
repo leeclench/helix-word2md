@@ -26,10 +26,24 @@ const {
   AZURE_WORD2MD_REFRESH_TOKEN: refreshToken,
 } = process.env;
 
+let tokens = {};
+try {
+  tokens = JSON.parse(fs.readFileSync('tokens.json', 'utf-8'));
+} catch (e) {
+  // ignore
+}
+
+const {
+  accessToken,
+  expiresOn,
+} = tokens;
+
 const drive = new OneDrive({
   clientId,
   clientSecret,
   refreshToken,
+  accessToken,
+  expiresOn,
 });
 
 // register event handle to write back tokens.
@@ -83,23 +97,30 @@ async function root(req, res) {
     // res.setHeader('content-type', 'application/json');
     // res.end(JSON.stringify(result, null, 2));
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end(`welcome <b>${result.displayName}</b><br><a href="/list">list</a><br>`);
+    const html = [
+      `welcome <b>${result.displayName}</b><br>`,
+      '<form method="get" action="/list">',
+      'Share link: <input name="l" size=40 value="https://adobe-my.sharepoint.com/personal/tripod_adobe_com/Documents/helix-content?csf=1&e=Fz6r5Z"><br>',
+      '<button>list</button><br>',
+      '</form>',
+    ].join('\n');
+    res.end(html);
   } catch (e) {
     console.error(e);
     res.status(500).send('Something broke!');
   }
 }
 
-async function list(req, res) {
-  const root = '/drives/b!O3W0KoHNgkGJDqK0Mx3HRg0KyUx90AtIiO0o6b7VpaHBBzev_e85S41-2BAnw1ma/items/01DZG6HAJTES6UCJDZP5D36MKGBX76IBXP';
-  const p = req.path;
-  const pa = p === '/' ? '' : p;
-  const uri = p === '/' ? `${root}/children` : `${root}:${p}:/children`;
-  console.log(p);
+async function listDocuments(req, res) {
+  const { l } = req.query;
+  if (!l) {
+    res.end('no share lin provided.');
+    return;
+  }
   try {
-    const result = await drive.client
-      .api(uri)
-      .get();
+    const pa = req.path.replace(/\/+$/, '');
+    const rootItem = await drive.getDriveItemFromShareLink(l);
+    const result = await drive.listChildren(rootItem, req.path);
     const list = result.value.map((entry) => {
       const e = {
         name: entry.name,
@@ -109,11 +130,7 @@ async function list(req, res) {
       return e;
     });
 
-    const html = list.map((e) => {
-      return `<a href="${e.link}">${e.name}</a><br>`;
-    }).join('\n');
-    // res.setHeader('content-type', 'application/json');
-    // res.end(JSON.stringify(list, null, 2));
+    const html = list.map((e) => `<a href="${e.link}?l=${encodeURIComponent(l)})">${e.name}</a><br>`).join('\n');
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(html);
   } catch (e) {
@@ -124,17 +141,16 @@ async function list(req, res) {
 }
 
 async function md(req, res) {
-  const root = '/drives/b!O3W0KoHNgkGJDqK0Mx3HRg0KyUx90AtIiO0o6b7VpaHBBzev_e85S41-2BAnw1ma/items/01DZG6HAJTES6UCJDZP5D36MKGBX76IBXP';
-  const p = req.path;
-  const pa = p === '/' ? '' : p;
-  const uri = `${root}:${p}`;
-  console.log(p);
+  const { l } = req.query;
+  if (!l) {
+    res.end('no share lin provided.');
+    return;
+  }
   try {
-    const result = await drive.client
-      .api(uri)
-      .get();
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify(result, null, 2));
+    const rootItem = await drive.getDriveItemFromShareLink(l);
+    const result = await drive.getDriveItem(rootItem, req.path, true);
+    res.setHeader('content-type', 'application/octet-stream');
+    res.send(result);
   } catch (e) {
     console.error(e);
     res.status(500)
@@ -195,7 +211,7 @@ app.get('/auth', asyncHandler(auth));
 app.get('/token', asyncHandler(token));
 
 
-app.use('/list', express.Router().get('*', asyncHandler(list)));
+app.use('/list', express.Router().get('*', asyncHandler(listDocuments)));
 app.use('/md', express.Router().get('*', asyncHandler(md)));
 app.get('/', asyncHandler(root));
 

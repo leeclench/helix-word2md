@@ -13,8 +13,7 @@
 // eslint-disable-next-line max-classes-per-file
 const EventEmitter = require('events');
 const { AuthenticationContext } = require('adal-node');
-const MicrosoftGraph = require('@microsoft/microsoft-graph-client');
-require('isomorphic-fetch');
+const rp = require('request-promise-native');
 
 const AZ_AUTHORITY_HOST_URL = 'https://login.windows.net';
 const AZ_RESOURCE = 'https://graph.microsoft.com'; // '00000002-0000-0000-c000-000000000000'; ??
@@ -34,6 +33,12 @@ class StatusCodeError extends Error {
 let tokenCache = {};
 
 /**
+ * map that caches share item data. key is a sharing url, the value a drive item.
+ * @type {Map<string, *>}
+ */
+const shareItemCache = new Map();
+
+/**
  * Helper class that facilitates accessing one drive.
  */
 class OneDrive extends EventEmitter {
@@ -43,7 +48,8 @@ class OneDrive extends EventEmitter {
     this.clientSecret = opts.clientSecret;
     this.refreshToken = opts.refreshToken;
     this._log = opts.log || console;
-    this._client = null;
+    tokenCache.accessToken = opts.accessToken || '';
+    tokenCache.expiresOn = opts.expiresOn || undefined;
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -51,19 +57,18 @@ class OneDrive extends EventEmitter {
     return !!tokenCache.accessToken;
   }
 
-  authProvider() {
-    return (done) => {
-      const { log } = this;
-      if (tokenCache.accessToken) {
-        const expires = Date.parse(tokenCache.expiresOn);
-        if (expires >= (Date.now())) {
-          log.info('access token still valid.');
-          done(null, tokenCache.accessToken);
-          return;
-        }
-        log.info('access token is expired. requesting new one.');
+  async getAccessToken() {
+    const { log } = this;
+    if (tokenCache.accessToken) {
+      const expires = Date.parse(tokenCache.expiresOn);
+      if (expires >= (Date.now())) {
+        log.info('access token still valid.');
+        return tokenCache.accessToken;
       }
+      log.info('access token is expired. requesting new one.');
+    }
 
+    return new Promise((resolve, reject) => {
       const context = new AuthenticationContext(AZ_AUTHORITY_URL);
       context.acquireTokenWithRefreshToken(
         this.refreshToken,
@@ -73,15 +78,15 @@ class OneDrive extends EventEmitter {
         (err, response) => {
           if (err) {
             log.error('Error while refreshing access token', err);
-            done('unable to refresh token');
+            reject(err);
           } else {
             tokenCache = response;
             this.emit('tokens', response);
-            done(null, tokenCache.accessToken);
+            resolve(tokenCache.accessToken);
           }
         },
       );
-    };
+    });
   }
 
   createLoginUrl(redirectUri, state) {
@@ -110,14 +115,20 @@ class OneDrive extends EventEmitter {
     });
   }
 
-  get client() {
-    if (!this._client) {
-      this._client = MicrosoftGraph.Client.init({
-        defaultVersion: 'v1.0',
-        authProvider: this.authProvider(),
-      });
+  async getClient(raw = false) {
+    const token = await this.getAccessToken();
+    const opts = {
+      baseUrl: 'https://graph.microsoft.com/v1.0',
+      json: true,
+      auth: {
+        bearer: token,
+      },
+    };
+    if (raw) {
+      delete opts.json;
+      opts.encoding = null;
     }
-    return this._client;
+    return rp.defaults(opts);
   }
 
   get log() {
@@ -126,10 +137,76 @@ class OneDrive extends EventEmitter {
 
   async me() {
     try {
-      return this
-        .client
-        .api('/me')
-        .get();
+      return (await this.getClient())
+        .get('/me');
+    } catch (e) {
+      this.log.error(e);
+      throw new StatusCodeError(e.msg, 500);
+    }
+  }
+
+  /**
+   * Encodes the sharing url into a token that can be used to access drive items.
+   * @param {string} sharingUrl A sharing url from one drive
+   * @see https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/shares_get?view=odsp-graph-online#encoding-sharing-urls
+   * @returns {string} an id for a shared item.
+   */
+  static encodeSharingUrl(sharingUrl) {
+    const base64 = Buffer
+      .from(sharingUrl, 'utf-8')
+      .toString('base64')
+      .replace(/=/, '')
+      .replace(/\//, '_')
+      .replace(/\+/, '-');
+    return `u!${base64}`;
+  }
+
+  async resolveShareLink(sharingUrl) {
+    const link = OneDrive.encodeSharingUrl(sharingUrl);
+    this.log.info(`resolving sharelink ${sharingUrl} (${link})`);
+    try {
+      return (await this.getClient())
+        .get(`/shares/${link}/driveItem`);
+    } catch (e) {
+      this.log.error(e);
+      throw new StatusCodeError(e.msg, 500);
+    }
+  }
+
+  async getDriveItemFromShareLink(sharingUrl) {
+    let driveItem = shareItemCache.get(sharingUrl);
+    if (!driveItem) {
+      driveItem = await this.resolveShareLink(sharingUrl);
+      shareItemCache.set(sharingUrl, driveItem);
+    }
+    return driveItem;
+  }
+
+  async listChildren(folderItem, relPath) {
+    // eslint-disable-next-line no-param-reassign
+    relPath = relPath.replace(/\/+$/, '');
+    const rootPath = `/drives/${folderItem.parentReference.driveId}/items/${folderItem.id}`;
+    const uri = !relPath ? `${rootPath}/children` : `${rootPath}:${relPath}:/children`;
+    try {
+      return (await this.getClient())
+        .get(uri);
+    } catch (e) {
+      this.log.error(e);
+      throw new StatusCodeError(e.msg, 500);
+    }
+  }
+
+  async getDriveItem(folderItem, relPath, download = false) {
+    // eslint-disable-next-line no-param-reassign
+    relPath = relPath.replace(/\/+$/, '');
+    const uri = `/drives/${folderItem.parentReference.driveId}/items/${folderItem.id}:${relPath}`;
+    try {
+      if (download) {
+        return (await this.getClient(true))
+          .get(`${uri}:/content`);
+      }
+      return (await this.getClient())
+        .get(uri);
     } catch (e) {
       this.log.error(e);
       throw new StatusCodeError(e.msg, 500);
