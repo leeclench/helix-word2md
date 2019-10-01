@@ -1,3 +1,15 @@
+# 1.0.0 (2019-10-01)
+
+
+### Bug Fixes
+
+* **deps:** pin dependencies ([f6f976c](https://github.com/adobe/helix-word2md/commit/f6f976c))
+
+
+### Features
+
+* **docx:** add docx to md converter ([cd7549b](https://github.com/adobe/helix-word2md/commit/cd7549b))
+
 ## [1.2.1](https://github.com/adobe/helix-googledocs2md/compare/v1.2.0...v1.2.1) (2019-09-20)
 
 
