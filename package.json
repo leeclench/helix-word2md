@@ -48,7 +48,7 @@
     "codecov": "3.6.1",
     "cookie-parser": "1.4.4",
     "dotenv": "8.1.0",
-    "eslint": "6.4.0",
+    "eslint": "6.5.1",
     "eslint-plugin-header": "3.0.0",
     "eslint-plugin-import": "2.18.2",
     "express": "4.17.1",
