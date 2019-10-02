@@ -30,7 +30,7 @@
   },
   "homepage": "https://github.com/adobe/helix-word2md#README",
   "dependencies": {
-    "@adobe/helix-status": "4.3.3",
+    "@adobe/helix-status": "5.0.1",
     "@adobe/openwhisk-action-utils": "2.3.4",
     "adal-node": "0.2.1",
     "mammoth": "^1.4.8",
@@ -70,5 +70,12 @@
     "ghooks": {
       "pre-commit": "npx lint-staged"
     }
+  },
+  "statuspage": {
+    "name": "Microsoft Word Adapter",
+    "group": "Delivery"
+  },
+  "newrelic": {
+    "group_policy": "Delivery Repeated Failure"
   }
 }
