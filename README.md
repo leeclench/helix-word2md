@@ -52,7 +52,7 @@ All commits to master that pass the testing will be deployed automatically. All 
 4. Click on _Copy Link_ and then _Copy_ in order to copy the link to your clipboard.
 ![](./docs/step3.png)
 5. Create a word document in your folder. eg: `test.docx`
-6. open a browser at `https://adobeioruntime.net/api/v1/web/helix-services/word2md@v1?shareLink=<your-share-link>&path=/test.docx`
+6. open a browser at `https://adobeioruntime.net/api/v1/web/helix/helix-services/word2md@v1?shareLink=<your-share-link>&path=/test.docx`
 
 
 
