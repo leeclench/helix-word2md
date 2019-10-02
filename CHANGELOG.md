@@ -1,3 +1,11 @@
+## [1.0.1](https://github.com/adobe/helix-word2md/compare/v1.0.0...v1.0.1) (2019-10-02)
+
+
+### Bug Fixes
+
+* **deps:** pin dependency mammoth to 1.4.8 ([#10](https://github.com/adobe/helix-word2md/issues/10)) ([5ed7473](https://github.com/adobe/helix-word2md/commit/5ed7473))
+* **monitoring:** use new automation tooling ([e339b62](https://github.com/adobe/helix-word2md/commit/e339b62))
+
 # 1.0.0 (2019-10-01)
 
 

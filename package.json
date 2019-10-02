@@ -1,6 +1,6 @@
 {
   "name": "@adobe/helix-word2md",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Helix Service that renders word documents as markdown",
   "main": "src/index.js",
