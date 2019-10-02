@@ -33,7 +33,7 @@
     "@adobe/helix-status": "5.0.1",
     "@adobe/openwhisk-action-utils": "2.3.4",
     "adal-node": "0.2.1",
-    "mammoth": "^1.4.8",
+    "mammoth": "1.4.8",
     "request": "2.88.0",
     "request-promise-native": "1.0.7"
   },
