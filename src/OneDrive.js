@@ -65,7 +65,7 @@ class OneDrive extends EventEmitter {
         log.info('access token still valid.');
         return tokenCache.accessToken;
       }
-      log.info('access token is expired. requesting new one.');
+      log.info('access token is expired. Requesting new one.');
     }
 
     return new Promise((resolve, reject) => {
@@ -147,7 +147,7 @@ class OneDrive extends EventEmitter {
 
   /**
    * Encodes the sharing url into a token that can be used to access drive items.
-   * @param {string} sharingUrl A sharing url from one drive
+   * @param {string} sharingUrl A sharing URL from OneDrive
    * @see https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/shares_get?view=odsp-graph-online#encoding-sharing-urls
    * @returns {string} an id for a shared item.
    */

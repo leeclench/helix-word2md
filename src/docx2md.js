@@ -15,7 +15,7 @@ const mammoth = require('mammoth');
 /**
  * Converts a docx to markdown.
  *
- * @param {Buffer} doc - the word document
+ * @param {Buffer} doc - the Word document
  * @returns the markdown representation.
  */
 async function docx2markdown(doc) {

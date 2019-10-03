@@ -32,7 +32,7 @@ function error(message, statusCode = 500) {
 }
 
 /**
- * Fetches the google document via API and converts it via docs2md.
+ * Fetches the Google document via the API and converts it via docs2md.
  * @param params
  * @returns {Promise<response>}
  */
@@ -95,8 +95,8 @@ async function run(params) {
   try {
     return await fetchViaAPI(params);
   } catch (e) {
-    log.error('error while converting document: %s', e);
-    return error('error while converting document', e.statusCode);
+    log.error('Error while converting document: %s', e);
+    return error('Error while converting document', e.statusCode);
   }
 }
 
